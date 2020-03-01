@@ -1,2 +1,1 @@
 # lunchbox
-Lunchbox Demo App

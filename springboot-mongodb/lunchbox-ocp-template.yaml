@@ -1,0 +1,134 @@
+kind: Template
+apiVersion: v1
+labels:
+  template: lunchbox-ocp-template
+metadata:
+  annotations:
+    description: Application template for SpringBoot and MongoDB demo application
+    iconClass: icon-spring
+    openshift.io/display-name: SpringBoot+MongoDB demo
+  name: lunchbox-ocp-template
+objects:
+  - kind: Service
+    apiVersion: v1
+    metadata:
+      labels:
+        app: ${APPLICATION_NAME}
+      name: ${APPLICATION_NAME}
+    spec:
+      ports:
+      - name: 8082-tcp
+        port: 8082
+        protocol: TCP
+        targetPort: 8082
+      selector:
+        app: ${APPLICATION_NAME}
+        deploymentconfig: ${APPLICATION_NAME}
+  - kind: Route
+    apiVersion: route.openshift.io/v1
+    metadata:
+      labels:
+        app: ${APPLICATION_NAME}
+      name: ${APPLICATION_NAME}
+    spec:
+      port:
+        targetPort: 8082-tcp
+      to:
+        kind: Service
+        name: ${APPLICATION_NAME}
+        weight: 100
+      wildcardPolicy: None
+  - kind: ImageStream
+    apiVersion: image.openshift.io/v1
+    metadata:
+      labels:
+        app: ${APPLICATION_NAME}
+      name: ${APPLICATION_NAME}
+  - kind: BuildConfig
+    apiVersion: build.openshift.io/v1
+    metadata:
+      labels:
+        app: ${APPLICATION_NAME}
+      name: ${APPLICATION_NAME}
+      annotations:
+        app.openshift.io/vcs-uri: https://github.com/mr-1g0r/lunchbox.git
+        description: Lunchbox demo build configuration
+    spec:
+      source:
+        type: Git
+        git:
+          uri: https://github.com/mr-1g0r/lunchbox.git
+        contextDir: /springboot-mongodb
+      output:
+        to:
+          kind: ImageStreamTag
+          name: ${APPLICATION_NAME}:latest
+      strategy:
+        sourceStrategy:
+          from:
+            kind: ImageStreamTag
+            name: java:8
+            namespace: openshift
+        type: Source
+  - kind: DeploymentConfig
+    apiVersion: apps.openshift.io/v1
+    metadata:
+      labels:
+        app: ${APPLICATION_NAME}
+      name: ${APPLICATION_NAME}
+    spec:
+      replicas: "${{REPLICA_COUNT}}"
+      selector:
+        app: ${APPLICATION_NAME}
+        deploymentconfig: ${APPLICATION_NAME}
+      template:
+        metadata:
+          labels:
+            app: ${APPLICATION_NAME}
+            deploymentconfig: ${APPLICATION_NAME}
+        spec:
+          containers:
+          - env:
+            - name: SPRING_DATA_MONGODB_URI
+              value: "${SPRING_DATA_MONGODB_URI_VALUE}"
+            name: ${APPLICATION_NAME}
+            image: image-registry.openshift-image-registry.svc:5000/${OCP_PROJECT_NAME}/${APPLICATION_NAME}
+            ports:
+            - containerPort: 8082
+              protocol: TCP
+            resources:
+              limits:
+                cpu: "1000m"
+                memory: "200Mi"
+              requests:
+                cpu: "50m"
+                memory: "50Mi"
+      triggers:
+      - imageChangeParams:
+          automatic: true
+          containerNames:
+          - ${APPLICATION_NAME}
+          from:
+            kind: ImageStreamTag
+            name: lunchbox-git:latest
+            namespace: ${OCP_PROJECT_NAME}
+        type: ImageChange
+      - type: ConfigChange
+parameters:
+  - name: APPLICATION_NAME
+    value: lunchbox-git
+    description: The name of the application
+    displayName: Application Name
+  - name: OCP_PROJECT_NAME
+    value: TBD
+    description: current project name to set the image prop in dc
+    displayName: This Project Name
+    required: true
+  - name: REPLICA_COUNT
+    description: Number of replicas to run
+    value: "0"
+    required: true
+  - name: SPRING_DATA_MONGODB_URI_VALUE
+    dscription: MongoDB connection string (to be provided by the template override)
+    value: "TBD"
+    required: true
